@@ -27,7 +27,7 @@ if platform.system() == "Windows":
 
 class Coupang:
 
-    def __init__(self, id, pw, connector, max_page_num=100):
+    def __init__(self, id, pw, connector, max_page_num=10):
         self.id = id
         self.pw = pw
         self.driver = self.get_chromedriver()
@@ -41,7 +41,8 @@ class Coupang:
 
         # 불필요한 에러 메시지 없애기
         chrome_options.add_experimental_option("excludeSwitches", ["enable-logging"])
-        service = Service(executable_path=ChromeDriverManager().install())
+        #service = Service(executable_path=ChromeDriverManager().install())
+        service = Service()
         service.creation_flags = CREATE_NO_WINDOW
         driver = webdriver.Chrome(options=chrome_options, service=service)
         
@@ -116,7 +117,8 @@ class Coupang:
     def search(self, query):
         query = query.replace(" ", "+")
         
-        df = pd.DataFrame(columns=['title', 'price', 'link', 'img_link', 'source', 'keyword'])
+        df = pd.DataFrame(columns=['title', 'price', 'link', 'img_link', 'source', 'keyword', 'rank'])
+        keyword_idx = 1
         for page in range(1, self.page_num + 1):
             print(page)
             self.driver.get(f'https://www.coupang.com/np/search?q={query}&channel=user&component=&eventCategory=SRP&trcid=&traid=&sorter=scoreDesc&minPrice=&maxPrice=&priceRange=&filterType=&listSize=36&filter=&isPriceRange=false&brand=&offerCondition=&rating=0&page={page}&rocketAll=false&searchIndexingToken=1=9&backgroundColor=')
@@ -153,13 +155,13 @@ class Coupang:
                     price = float(prod.find_element(By.CLASS_NAME, "price-value").text.replace(',',''))
                     link = prod.find_element(By.CLASS_NAME, "search-product-link").get_attribute('href')
 
-                    new_row = pd.DataFrame([[name, price, link, img, 'coupang', query]], columns=df.columns)
+                    new_row = pd.DataFrame([[name, price, link, img, 'coupang', query, keyword_idx]], columns=df.columns)
+                    keyword_idx += 1
                     df = pd.concat([df, new_row], ignore_index=True)
                 except Exception as e:
                     print(e)
                     continue
             self.driver.delete_all_cookies()
-        print(df)
         df.to_sql(name=Content.__tablename__, con=self.connection, \
             if_exists='append',index=False,chunksize=200)
         '''

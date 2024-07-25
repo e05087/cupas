@@ -14,6 +14,10 @@ from selenium.common.exceptions import TimeoutException
 from db.content import Content
 from db.link import Link
 from db.post_log import PostLog
+from bs4 import BeautifulSoup
+from db.info_log import InfoLog
+from db.neighbor import Neighbor
+import requests
 from utils import *
 import pyperclip
 import os
@@ -43,7 +47,8 @@ class Naver:
 
         # 불필요한 에러 메시지 없애기
         chrome_options.add_experimental_option("excludeSwitches", ["enable-logging"])
-        service = Service(executable_path=ChromeDriverManager().install())
+        #service = Service(executable_path=ChromeDriverManager().install())
+        service = Service()
         service.creation_flags = CREATE_NO_WINDOW
         driver = webdriver.Chrome(options=chrome_options, service=service)
         
@@ -81,7 +86,39 @@ class Naver:
         time.sleep(3)
         self.driver.get('https://blog.naver.com/MyBlog.naver')
         time.sleep(2)
+    
+    def neighbor(self, directory_seq=0, page_seq=0):
+        msg = "안녕하세요. 서로 이웃 추가를 통해 서로의 블로그를 발전시킬 수 있으면 좋을 것 같습니다~"
+        raw_query = f"""
+        select url from neighbor
+        """
+        data = pd.read_sql_query(raw_query, self.connector.get_engine())
+        exclude_list = data['url'].tolist()
+
+        url = "https://section.blog.naver.com/ThemePost.naver?directoryNo=0&activeDirectorySeq={directory_seq}&currentPage={page_seq}"
+        response = requests.get(url)
+        links = []
+        if response.status_code == 200:
+            soup = BeautifulSoup(response.text, 'html.parser')
+            author_links = soup.find_all('a', class_='author')
             
+            for link in author_links:
+                href = link.get('href')
+                if href:
+                    if href in exclude_list:
+                        continue
+                    links.append({'blog_name': href.split('/')[-1], 'url': href, 'category': directory_seq})
+        else:
+            print(f"Failed to retrieve page {page_seq} for directory {directory_seq}")
+        
+        links_df = pd.DataFrame(links)
+        links_df.to_sql(name=Neighbor.__tablename__, con=self.connection, \
+        if_exists='append',index=False)
+        
+        
+
+        
+
     def write_post(self, user_id, category_id=1, source = 'coupang'):
         blog_name = self.driver.current_url.split('blog.naver.com/')[-1]
         blog_url = self.driver.current_url
@@ -94,80 +131,252 @@ class Naver:
         FROM content c
         JOIN post p ON p.content_id=c.id
         JOIN link l ON l.content_id=c.id
-        WHERE c.source='{source}' AND p.id NOT IN (
+        WHERE  p.target='naver_blog' and c.source='{source}' AND p.id NOT IN (
             SELECT post_id FROM post_log WHERE user_id={user_id}
-        )
+        ) order BY c.rank desc limit 10
         """
 
         data = pd.read_sql_query(raw_query, self.connector.get_engine())
         data = data.sample(frac=1).reset_index(drop=True)
 
         for idx, row in data.iterrows():
-            self.driver.get(f'{blog_url}?Redirect=Write&categoryNo={category_id}')
-            content_id = row['id']
-            img_link = row['img_link']
-            link = row['link']
-            if include_url not in link:
-                continue
-            current_file_path = os.getcwd()
-            local_img_path = f"{current_file_path}/data/img/{content_id}.png"
-            urlretrieve(img_link, local_img_path)
-            #print(row)
-            time.sleep(2)
+            try:
+                self.driver.get(f'{blog_url}?Redirect=Write&categoryNo={category_id}')
+                content_id = row['id']
+                img_link = row['img_link']
+                link = row['link']
+                if include_url not in link:
+                    continue
+                current_file_path = os.getcwd()
+                local_img_path = f"{current_file_path}/data/img/{content_id}.png"
+                urlretrieve(img_link, local_img_path)
+                #print(row)
+                time.sleep(8)
+                file_size = os.path.getsize(local_img_path)
+                file_size_mb = file_size / (1024 * 1024)
+                if file_size_mb > 25:
+                    continue
 
-            # iframe으로 전환
-            iframe = WebDriverWait(self.driver, 5).until(
-                EC.frame_to_be_available_and_switch_to_it((By.ID, 'mainFrame'))  # iframe 선택자 변경 필요
-            )
+                # iframe으로 전환
+                iframe = WebDriverWait(self.driver, 5).until(
+                    EC.frame_to_be_available_and_switch_to_it((By.ID, 'mainFrame'))  # iframe 선택자 변경 필요
+                )
 
-            #self.driver.switch_to.frame('mainFrame')
-            wait_and_click(self.driver, 'se-popup-button-cancel', by=By.CLASS_NAME)
+                #self.driver.switch_to.frame('mainFrame')
+                wait_and_click(self.driver, 'se-popup-button-cancel', by=By.CLASS_NAME)
 
-            
-            
-            title = row['title'].replace('"', '')
-            body = row['body']
-            hashtag = filter_hashtag(row['hashtag'])
+                
+                
+                title = row['title'].replace('"', '')
+                body = row['body']
+                #hashtag = filter_hashtag(row['hashtag'])
 
-            #ActionChains(self.driver).send_keys(Keys.ARROW_UP).perform()
-            wait_and_click(self.driver, 'se-documentTitle', by=By.CLASS_NAME)
-            time.sleep(1)
-            keyboard_text_input_clipboard(self.driver, title)
-            wait_and_click(self.driver, 'se-text', by=By.CLASS_NAME)
-            wait_and_click(self.driver, 'se-image-toolbar-button', by=By.CLASS_NAME)
-            time.sleep(3)
-            img_input = self.driver.find_element(By.XPATH, '//*[@id="hidden-file"]')
-            img_input.send_keys(local_img_path)
-            
-            
-            #keyboard_text_input_clipboard(self.driver, local_img_path)
-            time.sleep(3)
-            #ActionChains(self.driver).key_down(Keys.ALT).send_keys('o').key_up(Keys.ALT).perform()
-            #time.sleep(5)
-            wait_and_click(self.driver, 'se-text', by=By.CLASS_NAME)
-            time.sleep(1)
-            perform_return(self.driver, 1)
-            #ActionChains(self.driver).send_keys(Keys.ARROW_DOWN).perform()
-            keyboard_text_input_clipboard(self.driver, body)
-            perform_return(self.driver, 3)
-            time.sleep(3)
-            short_link = shortener.tinyurl.short(link)
-            keyboard_text_input_clipboard(self.driver, short_link)
-            time.sleep(8)
-            perform_return(self.driver, 2)
-            keyboard_text_input(self.driver, "위 링크에서 해당 제품과 관련 제품에 대한 더 자세한 정보를 얻을 수 있습니다!")
-            perform_return(self.driver, 1)
-            keyboard_text_input(self.driver, "이 포스팅은 쿠팡파트너스 활동으로, 일정액의 수수료를 제공받을 수 있습니다.")
 
-            perform_return(self.driver, 2)
-            keyboard_text_input(self.driver, hashtag)
-            time.sleep(2)
-            wait_and_click(self.driver, 'se-help-panel-close-button', by=By.CLASS_NAME)
-            wait_and_click(self.driver, 'publish_btn__m9KHH', by=By.CLASS_NAME)
-            wait_and_click(self.driver, 'confirm_btn__WEaBq', by=By.CLASS_NAME)
-            row['user_id'] = user_id
-            row_df = pd.DataFrame([row])
+                wait_and_click(self.driver, 'se-popup-dim', by=By.CLASS_NAME)
+                ActionChains(self.driver).send_keys(Keys.ARROW_UP).perform()
+                #wait_and_click(self.driver, 'se-documentTitle', by=By.CLASS_NAME)
+                #time.sleep(5)
+                keyboard_text_input(self.driver, title)
+                time.sleep(1)
+                #wait_and_click(self.driver, 'se-text', by=By.CLASS_NAME)
+                ActionChains(self.driver).send_keys(Keys.ARROW_DOWN).perform()
+                wait_and_click(self.driver, 'se-image-toolbar-button', by=By.CLASS_NAME)
+                time.sleep(5)
+                img_input = self.driver.find_element(By.XPATH, '//*[@id="hidden-file"]')
+                img_input.send_keys(local_img_path)
+                
+                
+                #keyboard_text_input_clipboard(self.driver, local_img_path)
+                time.sleep(5)
+                #ActionChains(self.driver).key_down(Keys.ALT).send_keys('o').key_up(Keys.ALT).perform()
+                #time.sleep(5)
+                wait_and_click(self.driver, 'se-insert-quotation-default-toolbar-button', by=By.CLASS_NAME)
+                time.sleep(3)
+                keyboard_text_input(self.driver, title)
+                ActionChains(self.driver).send_keys(Keys.ARROW_DOWN).perform()
+                ActionChains(self.driver).send_keys(Keys.ARROW_DOWN).perform()
+                perform_return(self.driver, 2)
+                wait_and_click(self.driver, 'se-toolbar-item-font-family', by=By.CLASS_NAME)
+                time.sleep(2)
+                wait_and_click(self.driver, 'se-toolbar-option-font-family-nanumbareunhipi-button', by=By.CLASS_NAME)
+                
+                time.sleep(2)
+                perform_return(self.driver, 1)
+                lines = body.split('\n')
+                for idx, line in enumerate(lines):
+                    if idx == 0:
+                        continue
+                    line = line.strip()
+                    #if len(line) == 0:
+                    #    perform_return(self.driver, 1)
+                    if len(line) > 1 and line[0:2] == '##':
+                        line = line.split('##')[-1].strip()
+                        wait_and_click(self.driver, 'se-toolbar-item-font-size-code', by=By.CLASS_NAME)
+                        time.sleep(1)
+                        wait_and_click(self.driver, 'se-toolbar-option-font-size-code-fs19-button', by=By.CLASS_NAME)
+                        time.sleep(1)
+                        perform_return(self.driver, 1)
+                    else:
+                        wait_and_click(self.driver, 'se-toolbar-item-font-size-code', by=By.CLASS_NAME)
+                        time.sleep(1)
+                        wait_and_click(self.driver, 'se-toolbar-option-font-size-code-fs15-button', by=By.CLASS_NAME)
+                        time.sleep(1)
+                    
+                    keyboard_text_input(self.driver, line)
+                    perform_return(self.driver, 1)
+                perform_return(self.driver, 3)
+                short_link = shortener.tinyurl.short(link)
+                if len(short_link) < 10:
+                    short_link = link
+                time.sleep(2)
+                keyboard_text_input(self.driver, short_link)
+                perform_return(self.driver, 2)
+                time.sleep(15)
+                keyboard_text_input(self.driver, "위 링크에서 해당 제품과 관련 제품에 대한 더 자세한 정보를 얻을 수 있습니다!")
+                perform_return(self.driver, 1)
+                keyboard_text_input(self.driver, "이 포스팅은 쿠팡파트너스 활동으로, 일정액의 수수료를 제공받을 수 있습니다.")
 
-            row_df[['post_id', 'user_id']].to_sql(name=PostLog.__tablename__, con=self.connection, if_exists='append', index=False)
-            
-            time.sleep(10)
+                perform_return(self.driver, 2)
+                #keyboard_text_input(self.driver, hashtag)
+                time.sleep(3)
+                wait_and_click(self.driver, 'se-help-panel-close-button', by=By.CLASS_NAME)
+                wait_and_click(self.driver, 'publish_btn__m9KHH', by=By.CLASS_NAME)
+                wait_and_click(self.driver, 'confirm_btn__WEaBq', by=By.CLASS_NAME)
+                row['user_id'] = user_id
+                row_df = pd.DataFrame([row])
+
+                row_df[['post_id', 'user_id']].to_sql(name=PostLog.__tablename__, con=self.connection, if_exists='append', index=False)
+                
+                time.sleep(5)
+
+            except Exception as E:
+                print(E)
+                self.driver.quit()
+                return False
+        self.driver.quit()
+        return True
+    
+    def write_info(self, user_id, category_id=6):
+        blog_name = self.driver.current_url.split('blog.naver.com/')[-1]
+        blog_url = self.driver.current_url
+        # 올바르게 이스케이프된 쿼리 문자열
+        raw_query = f"""
+        SELECT i.id, i.title, i.body, w.img_link
+        FROM info i
+        JOIN wiki w ON w.id = i.wiki_id
+        WHERE  i.target='naver_blog' AND i.id NOT IN (
+            SELECT info_id FROM info_log WHERE user_id={user_id}
+        ) limit 10
+        """
+
+        data = pd.read_sql_query(raw_query, self.connector.get_engine())
+
+        for idx, row in data.iterrows():
+            try:
+                self.driver.get(f'{blog_url}?Redirect=Write&categoryNo={category_id}')
+                info_id = row['id']
+                img_link = row['img_link']
+                current_file_path = os.getcwd()
+                local_img_path = f"{current_file_path}/data/img/{info_id}.png"
+                try:
+                    urlretrieve(img_link, local_img_path)
+                    row['user_id'] = user_id
+                    row['info_id'] = info_id
+                    row_df = pd.DataFrame([row])
+                    row_df[['info_id', 'user_id']].to_sql(name=InfoLog.__tablename__, con=self.connection, if_exists='append', index=False)
+                except:
+                    continue
+                #print(row)
+                time.sleep(8)
+                file_size = os.path.getsize(local_img_path)
+                file_size_mb = file_size / (1024 * 1024)
+                if file_size_mb > 25:
+                    continue
+
+                # iframe으로 전환
+                iframe = WebDriverWait(self.driver, 5).until(
+                    EC.frame_to_be_available_and_switch_to_it((By.ID, 'mainFrame'))  # iframe 선택자 변경 필요
+                )
+
+                #self.driver.switch_to.frame('mainFrame')
+                wait_and_click(self.driver, 'se-popup-button-cancel', by=By.CLASS_NAME)
+
+                
+                
+                title = row['title'].replace('"', '')
+                body = row['body']
+                #hashtag = filter_hashtag(row['hashtag'])
+
+
+                wait_and_click(self.driver, 'se-popup-dim', by=By.CLASS_NAME)
+                ActionChains(self.driver).send_keys(Keys.ARROW_UP).perform()
+                #wait_and_click(self.driver, 'se-documentTitle', by=By.CLASS_NAME)
+                #time.sleep(5)
+                keyboard_text_input(self.driver, title)
+                time.sleep(1)
+                #wait_and_click(self.driver, 'se-text', by=By.CLASS_NAME)
+                ActionChains(self.driver).send_keys(Keys.ARROW_DOWN).perform()
+                wait_and_click(self.driver, 'se-image-toolbar-button', by=By.CLASS_NAME)
+                time.sleep(5)
+                img_input = self.driver.find_element(By.XPATH, '//*[@id="hidden-file"]')
+                img_input.send_keys(local_img_path)
+                
+                
+                #keyboard_text_input_clipboard(self.driver, local_img_path)
+                time.sleep(5)
+                #ActionChains(self.driver).key_down(Keys.ALT).send_keys('o').key_up(Keys.ALT).perform()
+                #time.sleep(5)
+                wait_and_click(self.driver, 'se-insert-quotation-default-toolbar-button', by=By.CLASS_NAME)
+                time.sleep(3)
+                keyboard_text_input(self.driver, title)
+                ActionChains(self.driver).send_keys(Keys.ARROW_DOWN).perform()
+                ActionChains(self.driver).send_keys(Keys.ARROW_DOWN).perform()
+                perform_return(self.driver, 2)
+                wait_and_click(self.driver, 'se-toolbar-item-font-family', by=By.CLASS_NAME)
+                time.sleep(2)
+                wait_and_click(self.driver, 'se-toolbar-option-font-family-nanummaruburi-button', by=By.CLASS_NAME)
+                
+                time.sleep(2)
+                perform_return(self.driver, 1)
+                lines = body.split('\n')
+                for idx, line in enumerate(lines):
+                    if idx == 0:
+                        continue
+                    line = line.strip()
+                    #if len(line) == 0:
+                    #    perform_return(self.driver, 1)
+                    if len(line) > 1 and line[0:2] == '##':
+                        line = line.split('##')[-1].strip()
+                        wait_and_click(self.driver, 'se-toolbar-item-font-size-code', by=By.CLASS_NAME)
+                        time.sleep(1)
+                        wait_and_click(self.driver, 'se-toolbar-option-font-size-code-fs19-button', by=By.CLASS_NAME)
+                        time.sleep(1)
+                        perform_return(self.driver, 1)
+                    else:
+                        wait_and_click(self.driver, 'se-toolbar-item-font-size-code', by=By.CLASS_NAME)
+                        time.sleep(1)
+                        wait_and_click(self.driver, 'se-toolbar-option-font-size-code-fs15-button', by=By.CLASS_NAME)
+                        time.sleep(1)
+                    
+                    keyboard_text_input(self.driver, line)
+                    perform_return(self.driver, 1)
+                perform_return(self.driver, 3)
+
+                time.sleep(2)
+                wait_and_click(self.driver, 'se-help-panel-close-button', by=By.CLASS_NAME)
+                wait_and_click(self.driver, 'publish_btn__m9KHH', by=By.CLASS_NAME)
+                wait_and_click(self.driver, 'confirm_btn__WEaBq', by=By.CLASS_NAME)
+                row['user_id'] = user_id
+                row['info_id'] = info_id
+                row_df = pd.DataFrame([row])
+                
+                row_df[['info_id', 'user_id']].to_sql(name=InfoLog.__tablename__, con=self.connection, if_exists='append', index=False)
+                
+                time.sleep(5)
+
+            except Exception as E:
+                print(E)
+                self.driver.quit()
+                return False
+        self.driver.quit()
+        return True

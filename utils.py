@@ -13,7 +13,7 @@ import re
 def keyboard_text_input(driver, text):
     for char in text:
         ActionChains(driver).send_keys(char).perform()
-        time.sleep(random.randint(1,15)/100)
+        time.sleep(random.randint(1,5)/100)
 
 def keyboard_text_input_clipboard(driver, text):
     clipboard.copy(text)

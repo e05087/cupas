@@ -12,7 +12,6 @@ class Post(Base):
     target = Column(Text)
     title = Column(Text)
     body = Column(Text)
-    hashtag = Column(Text)
     created_at = Column(DateTime(timezone=False), server_default=func.now())
     updated_at = Column(DateTime(timezone=False), onupdate=func.now())
     

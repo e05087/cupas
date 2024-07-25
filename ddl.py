@@ -5,6 +5,10 @@ from db.content import Base as ContentBase
 from db.post import Base as PostBase
 from db.link import Base as LinkBase
 from db.post_log import Base as PostLogBase
+from db.wiki import Base as WikiBase
+from db.info import Base as InfoBase
+from db.info_log import Base as InfoLogBase
+from db.neighbor import Base as NeighborBase
 
 if __name__ == '__main__':
     setting = Settings()
@@ -14,6 +18,10 @@ if __name__ == '__main__':
     PostBase.metadata.create_all(engine, checkfirst=True)
     LinkBase.metadata.create_all(engine, checkfirst=True)
     PostLogBase.metadata.create_all(engine, checkfirst=True)
+    WikiBase.metadata.create_all(engine, checkfirst=True)
+    InfoBase.metadata.create_all(engine, checkfirst=True)
+    InfoLogBase.metadata.create_all(engine, checkfirst=True)
+    NeighborBase.metadata.create_all(engine, checkfirst=True)
 
     Session = sessionmaker(bind=engine)
 

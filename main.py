@@ -3,6 +3,7 @@ from naver import Naver
 from settings import Settings
 import pandas as pd
 from db.connector import Connector
+import random
 import sys
 import time
 
@@ -26,12 +27,34 @@ if __name__ == '__main__':
             if done:
                 break
             else:
-                time.sleep(100)
+                time.sleep(5)
                 c = Coupang(setting.coupang_id, setting.coupang_passwd, connector)
                 continue
 
     elif sys.argv[1] == 'post':
-        n = Naver(setting.naver_id, setting.naver_passwd, connector)
-        n.login()
-        n.write_post(0)
+        acc_cnt = {}
+        while True:
+            account = random.choice(setting.naver_accounts)
+            id = account['id']
+            passwd = account['passwd']
+            if id not in acc_cnt:
+                acc_cnt[id] = 0
+            n = Naver(id, passwd, connector)
+            n.login()
+            done = n.write_post(0)
+            acc_cnt[id] += 1
+            time.sleep(5)
 
+    elif sys.argv[1] == 'wiki':
+        acc_cnt = {}
+        while True:
+            account = random.choice(setting.naver_accounts)
+            id = account['id']
+            passwd = account['passwd']
+            if id not in acc_cnt:
+                acc_cnt[id] = 0
+            n = Naver(id, passwd, connector)
+            n.login()
+            done = n.write_info(0)
+            acc_cnt[id] += 1
+            time.sleep(5)
