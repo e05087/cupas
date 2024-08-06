@@ -4,6 +4,7 @@ import time
 from selenium.webdriver.common.keys import Keys
 from selenium.webdriver.common.by import By
 import random
+from bs4 import BeautifulSoup
 import clipboard
 from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
@@ -47,6 +48,19 @@ def wait_and_click(driver, path, by=By.XPATH):
         print("Timeout: No elements found within the specified time.")
     except Exception as e:
         print(f"An error occurred: {e}")
+
+def get_text_from_class(driver, path, by=By.CLASS_NAME):
+    try:
+        WebDriverWait(driver, 5).until(
+            EC.presence_of_element_located((by, path))
+        )
+        page_source = driver.page_source
+        soup = BeautifulSoup(page_source, 'html.parser')
+        element = soup.find('div', class_=path)
+        return element.get_text(strip=True) if element else None
+    except Exception as e:
+        print(f"Error getting text from class {path}: {e}")
+        return None
 
 
 

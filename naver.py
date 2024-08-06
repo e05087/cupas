@@ -90,6 +90,26 @@ class Naver:
         self.driver.get('https://blog.naver.com/MyBlog.naver')
         time.sleep(2)
     
+    def write_answer_kin(self, url, content):
+        raw_query = f"""
+        SELECT * FROM qna WHERE id NOT IN (SELECT qna_id FROM qna_answer) ORDER BY content_created_at desc
+        """
+
+        data = pd.read_sql_query(raw_query, self.connector.get_engine())
+        for idx, row in data.iterrows():
+            try:
+                link = row['link']
+                self.driver.get(link)
+                wait_and_click(self.driver, 'ico_close_layer', By.CLASS_NAME)
+                title = get_text_from_class(self.driver, 'endTitleSection')
+                question = get_text_from_class(self.driver, 'questionDetail')
+                print(title, question)
+                break
+
+            except Exception as E:
+                print(E)
+                continue
+
     def neighbor(self, page_seq=0):
         df = pd.read_csv('data/neighbor_msg.csv', header=None)
         msg_list = df[0].tolist()

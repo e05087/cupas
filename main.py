@@ -74,6 +74,7 @@ if __name__ == '__main__':
             done = n.neighbor(page_seq=i)
             acc_cnt[id] += 1
             time.sleep(20)
+            
     elif sys.argv[1] == 'kin_fetch':
         nkf = NaverKinFetcher(connector)
         keyword_list = ["한우 선물", "한우 추천", "한우 업체", "한우 주문", "고급 한우", "프리미엄 한우", 
