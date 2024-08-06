@@ -39,11 +39,11 @@ if __name__ == '__main__':
             passwd = account['passwd']
             if id not in acc_cnt:
                 acc_cnt[id] = 0
-            n = Naver(id, passwd, connector)
+            n = Naver(id, passwd, connector, headless=False)
             n.login()
             done = n.write_post(0)
             acc_cnt[id] += 1
-            time.sleep(5)
+            time.sleep(60)
 
     elif sys.argv[1] == 'wiki':
         acc_cnt = {}
@@ -57,4 +57,19 @@ if __name__ == '__main__':
             n.login()
             done = n.write_info(0)
             acc_cnt[id] += 1
-            time.sleep(5)
+            time.sleep(60)
+
+    elif sys.argv[1] == 'neighbor':
+        acc_cnt = {}
+        for i in range(6,20):
+            account = random.choice(setting.naver_accounts)
+            id = account['id']
+            passwd = account['passwd']
+            if id not in acc_cnt:
+                acc_cnt[id] = 0
+            n = Naver(id, passwd, connector, headless=False)
+            n.login()
+            done = n.neighbor(page_seq=i)
+            acc_cnt[id] += 1
+            time.sleep(20)
+                

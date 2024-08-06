@@ -9,6 +9,8 @@ from db.wiki import Base as WikiBase
 from db.info import Base as InfoBase
 from db.info_log import Base as InfoLogBase
 from db.neighbor import Base as NeighborBase
+from db.qna import Base as QnaBase
+from db.qna_answer import Base as QnaAnswerBase
 
 if __name__ == '__main__':
     setting = Settings()
@@ -22,6 +24,8 @@ if __name__ == '__main__':
     InfoBase.metadata.create_all(engine, checkfirst=True)
     InfoLogBase.metadata.create_all(engine, checkfirst=True)
     NeighborBase.metadata.create_all(engine, checkfirst=True)
+    QnaBase.metadata.create_all(engine, checkfirst=True)
+    QnaAnswerBase.metadata.create_all(engine, checkfirst=True)
 
     Session = sessionmaker(bind=engine)
 

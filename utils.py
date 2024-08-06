@@ -39,7 +39,7 @@ def wait_and_click(driver, path, by=By.XPATH):
         )
 
         if not prods:
-            print("No elements found with class name 'search-product'")
+            print(f"No elements found with {path}")
         else:
             driver.find_element(by,path).click()
             print(f"{path} clicked!@@@@@@@@@@@@@@@")
@@ -47,4 +47,6 @@ def wait_and_click(driver, path, by=By.XPATH):
         print("Timeout: No elements found within the specified time.")
     except Exception as e:
         print(f"An error occurred: {e}")
+
+
 

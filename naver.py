@@ -24,7 +24,7 @@ import os
 from urllib.request import urlretrieve
 import pandas as pd  # pandas 라이브러리는 pip를 통해 설치 필요
 import subprocess
-
+import random
 import platform
 import pyshorteners
 
@@ -34,16 +34,19 @@ if platform.system() == "Windows":
 
 
 class Naver:
-    def __init__(self, id, pw, connector):
+    def __init__(self, id, pw, connector, headless=False):
         self.id = id
         self.pw = pw
-        self.driver = self.get_chromedriver()
+        
+        self.driver = self.get_chromedriver(headless=headless)
         self.connection = connector.get_connection()
         self.connector = connector
 
-    def get_chromedriver(self) -> webdriver.Chrome:
+    def get_chromedriver(self, headless=False) -> webdriver.Chrome:
         chrome_options = Options()
         chrome_options.add_experimental_option("detach", True)
+        if headless:
+            chrome_options.add_argument("--headless")
 
         # 불필요한 에러 메시지 없애기
         chrome_options.add_experimental_option("excludeSwitches", ["enable-logging"])
@@ -87,35 +90,77 @@ class Naver:
         self.driver.get('https://blog.naver.com/MyBlog.naver')
         time.sleep(2)
     
-    def neighbor(self, directory_seq=0, page_seq=0):
-        msg = "안녕하세요. 서로 이웃 추가를 통해 서로의 블로그를 발전시킬 수 있으면 좋을 것 같습니다~"
-        raw_query = f"""
-        select url from neighbor
-        """
-        data = pd.read_sql_query(raw_query, self.connector.get_engine())
-        exclude_list = data['url'].tolist()
+    def neighbor(self, page_seq=0):
+        df = pd.read_csv('data/neighbor_msg.csv', header=None)
+        msg_list = df[0].tolist()
+        try:
+            url = f"https://section.blog.naver.com/ThemePost.naver?directoryNo=0&activeDirectorySeq=0&currentPage={page_seq}"
+            self.driver.get(url)
+            author_elements = self.driver.find_elements(By.CLASS_NAME, 'author')
+            links = []
+            for elem in author_elements:
+                links.append(elem.get_attribute('href'))
+            print(links)
 
-        url = "https://section.blog.naver.com/ThemePost.naver?directoryNo=0&activeDirectorySeq={directory_seq}&currentPage={page_seq}"
-        response = requests.get(url)
-        links = []
-        if response.status_code == 200:
-            soup = BeautifulSoup(response.text, 'html.parser')
-            author_links = soup.find_all('a', class_='author')
-            
-            for link in author_links:
-                href = link.get('href')
-                if href:
-                    if href in exclude_list:
+            for link in links:
+                try:
+                    #wait_and_click(self.driver, By.CLASS_NAME, '_addBuddyPop')
+                    self.driver.get(link)
+
+                    time.sleep(3)
+                    iframe = WebDriverWait(self.driver, 5).until(
+                        EC.frame_to_be_available_and_switch_to_it((By.ID, 'mainFrame'))  # iframe 선택자 변경 필요
+                    )
+
+                    print("iframe success")
+                    wait_and_click(self.driver, '_addBuddyPop', by=By.CLASS_NAME)
+                    time.sleep(3)
+                    # 모든 창 핸들을 가져옴
+                    main_window_handle = self.driver.current_window_handle
+                    window_handles = self.driver.window_handles
+
+                    print(main_window_handle)
+                    print(window_handles)
+                    # 팝업 창 핸들을 찾아 전환
+                    for handle in window_handles:
+                        if handle != main_window_handle:
+                            popup_window_handle = handle
+                            self.driver.switch_to.window(popup_window_handle)
+                            break
+                    
+                    wait_and_click(self.driver, 'radio_bothbuddy', by=By.CLASS_NAME)
+                    time.sleep(1)
+                    element = self.driver.find_element(By.CLASS_NAME, 'radio_bothbuddy')
+                    class_attribute = element.get_attribute('class')
+                    # checked 클래스가 있는지 확인
+                    if 'checked' in class_attribute.split():
+                        pass
+                    else:
+                        self.driver.switch_to.window(main_window_handle)
+                        print(f"Element does not have 'checked' class.")
                         continue
-                    links.append({'blog_name': href.split('/')[-1], 'url': href, 'category': directory_seq})
-        else:
-            print(f"Failed to retrieve page {page_seq} for directory {directory_seq}")
-        
-        links_df = pd.DataFrame(links)
-        links_df.to_sql(name=Neighbor.__tablename__, con=self.connection, \
-        if_exists='append',index=False)
-        
-        
+                    time.sleep(0.5)
+                    wait_and_click(self.driver, '_buddyAddNext', by=By.CLASS_NAME)
+                    time.sleep(0.5)
+                    wait_and_click(self.driver, 'message_box', by=By.CLASS_NAME)
+                    time.sleep(0.5)
+                    keyboard_text_input(self.driver, random.choice(msg_list))
+                    wait_and_click(self.driver, '_addBothBuddy', by=By.CLASS_NAME)
+                    time.sleep(0.5)
+                    self.driver.switch_to.window(main_window_handle)
+                    #self.driver.close()
+                    time.sleep(5)
+                except Exception as E:
+                    print(E)
+                    self.driver.switch_to.window(main_window_handle)
+                    continue
+
+        except Exception as E:
+            print(E)
+            self.driver.quit()
+            return
+        self.driver.quit()
+                  
 
         
 
@@ -133,7 +178,7 @@ class Naver:
         JOIN link l ON l.content_id=c.id
         WHERE  p.target='naver_blog' and c.source='{source}' AND p.id NOT IN (
             SELECT post_id FROM post_log WHERE user_id={user_id}
-        ) order BY c.rank desc limit 10
+        ) limit 5
         """
 
         data = pd.read_sql_query(raw_query, self.connector.get_engine())
@@ -142,6 +187,7 @@ class Naver:
         for idx, row in data.iterrows():
             try:
                 self.driver.get(f'{blog_url}?Redirect=Write&categoryNo={category_id}')
+                print(1)
                 content_id = row['id']
                 img_link = row['img_link']
                 link = row['link']
@@ -150,18 +196,18 @@ class Naver:
                 current_file_path = os.getcwd()
                 local_img_path = f"{current_file_path}/data/img/{content_id}.png"
                 urlretrieve(img_link, local_img_path)
+                print(2)
                 #print(row)
                 time.sleep(8)
                 file_size = os.path.getsize(local_img_path)
                 file_size_mb = file_size / (1024 * 1024)
                 if file_size_mb > 25:
                     continue
-
+                print(3)
                 # iframe으로 전환
                 iframe = WebDriverWait(self.driver, 5).until(
                     EC.frame_to_be_available_and_switch_to_it((By.ID, 'mainFrame'))  # iframe 선택자 변경 필요
                 )
-
                 #self.driver.switch_to.frame('mainFrame')
                 wait_and_click(self.driver, 'se-popup-button-cancel', by=By.CLASS_NAME)
 
@@ -173,6 +219,7 @@ class Naver:
 
 
                 wait_and_click(self.driver, 'se-popup-dim', by=By.CLASS_NAME)
+                wait_and_click(self.driver, 'se-text', by=By.CLASS_NAME)
                 ActionChains(self.driver).send_keys(Keys.ARROW_UP).perform()
                 #wait_and_click(self.driver, 'se-documentTitle', by=By.CLASS_NAME)
                 #time.sleep(5)
@@ -247,7 +294,7 @@ class Naver:
 
                 row_df[['post_id', 'user_id']].to_sql(name=PostLog.__tablename__, con=self.connection, if_exists='append', index=False)
                 
-                time.sleep(5)
+                time.sleep(30)
 
             except Exception as E:
                 print(E)
@@ -266,7 +313,7 @@ class Naver:
         JOIN wiki w ON w.id = i.wiki_id
         WHERE  i.target='naver_blog' AND i.id NOT IN (
             SELECT info_id FROM info_log WHERE user_id={user_id}
-        ) limit 10
+        ) limit 5
         """
 
         data = pd.read_sql_query(raw_query, self.connector.get_engine())
@@ -372,7 +419,7 @@ class Naver:
                 
                 row_df[['info_id', 'user_id']].to_sql(name=InfoLog.__tablename__, con=self.connection, if_exists='append', index=False)
                 
-                time.sleep(5)
+                time.sleep(30)
 
             except Exception as E:
                 print(E)
