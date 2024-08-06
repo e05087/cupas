@@ -10,6 +10,7 @@ class QnaAnswer(Base):
     id = Column(Integer, primary_key=True, autoincrement=True)
     qna_id = Column(Integer)
     user_id = Column(Text)
+    content = Column(Text)
     is_accepted = Column(Boolean, default=False)
     created_at = Column(DateTime(timezone=False), server_default=func.now())
     updated_at = Column(DateTime(timezone=False), onupdate=func.now())
