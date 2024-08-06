@@ -1,5 +1,5 @@
 from sqlalchemy.orm import declarative_base
-from sqlalchemy import Column, Double, String, Integer, DateTime, Text
+from sqlalchemy import Column, Float, String, Integer, DateTime, Text
 from sqlalchemy.sql import func
 Base = declarative_base()
 
@@ -10,7 +10,7 @@ class Content(Base):
     id = Column(Integer, primary_key=True, autoincrement=True)
     source = Column(Text)
     title = Column(Text)
-    price = Column(Double)
+    price = Column(Float)
     link = Column(Text)
     img_link = Column(Text)
     keyword = Column(Text)

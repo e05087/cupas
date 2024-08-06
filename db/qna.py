@@ -1,5 +1,5 @@
 from sqlalchemy.orm import declarative_base
-from sqlalchemy import Column, Double, String, Integer, DateTime, Text, Boolean
+from sqlalchemy import Column, String, Integer, DateTime, Text, Boolean
 from sqlalchemy.sql import func
 Base = declarative_base()
 
@@ -12,7 +12,7 @@ class Qna(Base):
     link = Column(Text)
     title = Column(Text)
     keyword = Column(Text)
-    created_by_us = Column(Boolean, server_default=0)
+    created_by_us = Column(Boolean, default=False)
     content_created_at = Column(DateTime(timezone=False))
     created_at = Column(DateTime(timezone=False), server_default=func.now())
     updated_at = Column(DateTime(timezone=False), onupdate=func.now())

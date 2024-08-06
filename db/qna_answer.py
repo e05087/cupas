@@ -1,5 +1,5 @@
 from sqlalchemy.orm import declarative_base
-from sqlalchemy import Column, Double, String, Integer, DateTime, Text, Boolean
+from sqlalchemy import Column, String, Integer, DateTime, Text, Boolean
 from sqlalchemy.sql import func
 Base = declarative_base()
 
@@ -10,7 +10,7 @@ class QnaAnswer(Base):
     id = Column(Integer, primary_key=True, autoincrement=True)
     qna_id = Column(Integer)
     user_id = Column(Text)
-    is_accepted = Column(Boolean, server_default=0)
+    is_accepted = Column(Boolean, default=False)
     created_at = Column(DateTime(timezone=False), server_default=func.now())
     updated_at = Column(DateTime(timezone=False), onupdate=func.now())
     
