@@ -11,6 +11,7 @@ from webdriver_manager.chrome import ChromeDriverManager
 from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
 from selenium.common.exceptions import TimeoutException
+from db.qna_answer import QnaAnswer
 from db.content import Content
 from db.link import Link
 from db.post_log import PostLog
@@ -24,6 +25,7 @@ import os
 from urllib.request import urlretrieve
 import pandas as pd  # pandas 라이브러리는 pip를 통해 설치 필요
 import subprocess
+from datetime import datetime
 import random
 import platform
 import pyshorteners
@@ -89,10 +91,156 @@ class Naver:
         time.sleep(3)
         self.driver.get('https://blog.naver.com/MyBlog.naver')
         time.sleep(2)
+
+    def write_question_kin(self):
+        self.driver.get('https://kin.naver.com/qna/question.naver')
+        time.sleep(3)
+        iframe = WebDriverWait(self.driver, 5).until(
+            EC.frame_to_be_available_and_switch_to_it((By.ID, 'editor'))  # iframe 선택자 변경 필요
+        )
+        tags = [
+                "선물추천",
+                "선물",
+                "한우",
+                "한우세트",
+                "추석선물",
+                "명절선물",
+                "명절선물세트",
+                "추석선물세트",
+                "한우명절선물",
+                "고급선물",
+                "프리미엄한우",
+                "명절한우",
+                "추석한우",
+                "가족선물",
+                "고급선물세트",
+                "한우선물세트",
+                "명절한우세트",
+                "한우추석선물",
+                "한우선물",
+        ]
+        result = get_gpt_result_for_question(random.choice(tags))
+        lines = [line for line in result.split('\n') if line.strip()]
+
+        # 첫 번째 문장을 title로, 나머지 문장을 content로 할당
+        title = lines[0]
+        content = '\n'.join(lines[1:]).strip()
+        wait_and_click(self.driver, 'title', By.ID)
+        time.sleep(1)
+        keyboard_text_input(self.driver, title)
+        iframe = WebDriverWait(self.driver, 5).until(
+            EC.frame_to_be_available_and_switch_to_it((By.ID, 'SmartEditorIframe'))  # iframe 선택자 변경 필요
+        )
+
+        print("iframe success")
+        wait_and_click(self.driver, 'body', By.TAG_NAME)
+        time.sleep(1)
+        keyboard_text_input(self.driver, content)
+        time.sleep(3)
+        self.driver.switch_to.default_content()
+        iframe = WebDriverWait(self.driver, 5).until(
+            EC.frame_to_be_available_and_switch_to_it((By.ID, 'editor'))  # iframe 선택자 변경 필요
+        )
+
+
+        wait_and_click(self.driver, '_register', By.CLASS_NAME)
+        time.sleep(3)
+        if '한우' not in content:
+            tags = [tag for tag in tags if '한우' not in tag]
+
+
+        # 필터링된 리스트에서 랜덤하게 2개의 태그를 선택합니다.
+        random_tags = random.sample(tags, 2)
+        for tag in random_tags:
+            wait_and_click(self.driver, '_tagInput', By.CLASS_NAME)
+            time.sleep(1)
+            keyboard_text_input(self.driver, tag)
+            time.sleep(1)
+            wait_and_click(self.driver, '_tagAddBtn', By.CLASS_NAME)
+
+        time.sleep(1)
+        wait_and_click(self.driver, '//*[@id="au_submit_button2"]/div[1]/button', By.XPATH)
+        wait_and_accept(self.driver)
+        time.sleep(5)
+        current_url = self.driver.current_url
+        url = remove_query_param(current_url, 'd1id')
+        df = pd.DataFrame(columns=['source', 'link', 'title', 'keyword', 'created_by', 'content_created_at'])
+
+        # 새로운 행을 생성합니다.
+        new_row = {
+            'source': 'kin',
+            'link': url,
+            'title': title,
+            'keyword': random_tags[0],
+            'created_by': self.id,
+            'content_created_at': datetime.now()
+        }
+
+        # 새로운 행을 DataFrame으로 변환합니다.
+        new_row_df = pd.DataFrame([new_row])
+
+        # DataFrame에 새로운 행을 추가합니다.
+        df = pd.concat([df, new_row_df], ignore_index=True)
+
+        # DataFrame을 SQL 테이블에 저장합니다.
+        df.to_sql('qna', con=self.connection, if_exists='append', index=False)
+        self.driver.quit()
+        
+
     
-    def write_answer_kin(self, url, content):
+    def accept_answer_kin(self):
+
         raw_query = f"""
-        SELECT * FROM qna WHERE id NOT IN (SELECT qna_id FROM qna_answer) ORDER BY content_created_at desc
+        SELECT *, qa.id as qa_id FROM qna q
+        JOIN qna_answer qa ON qa.qna_id = q.id
+        WHERE q.created_by = '{self.id}' AND qa.is_accepted=0 ORDER BY content_created_at desc
+        """
+
+        data = pd.read_sql_query(raw_query, self.connector.get_engine())
+        for idx, row in data.iterrows():
+            try:
+                link = row['link']
+                self.driver.get(link)
+                wait_and_click(self.driver, 'ico_close_layer', By.CLASS_NAME)
+                answer_divs = self.driver.find_elements(By.CLASS_NAME, 'answerDetail')
+                for div in answer_divs:
+                    text = div.text.strip()
+                    if text[:5] == row['content'].strip()[:5]:
+                        print(f"Found matching div: {text}")
+                        
+                        # 부모 div에서 _answerSelectArea 클래스를 가진 버튼 찾기
+                        parent_div = div.find_element(By.XPATH, './..')  # 부모 div 찾기
+                        button = parent_div.find_element(By.CLASS_NAME, '_answerSelectArea')
+                        # 버튼 클릭
+                        button.click()
+                        print("Button clicked.")
+                        time.sleep(5)
+                        wait_and_accept(self.driver)
+                        update_query = f"UPDATE qna_answer SET is_accepted = 1 WHERE id = {row['qa_id']};"
+
+                        # raw SQL 쿼리 실행
+                        with self.connector.get_connection() as conn:
+                            conn.execute(update_query)
+                            print("Row updated successfully.")
+
+                        # 연결 종료
+                        self.connector.close_connection()
+
+                        break  # 첫 번째 매칭 후 루프 종료
+                time.sleep(10)
+            except Exception as E:
+                print(E)
+                time.sleep(5)
+                continue
+        self.driver.quit()
+
+
+
+                
+
+    def write_answer_kin(self):
+        raw_query = f"""
+        SELECT * FROM qna WHERE id NOT IN (SELECT qna_id FROM qna_answer)  and created_by != '{self.id}' ORDER BY content_created_at desc
         """
 
         data = pd.read_sql_query(raw_query, self.connector.get_engine())
@@ -103,12 +251,65 @@ class Naver:
                 wait_and_click(self.driver, 'ico_close_layer', By.CLASS_NAME)
                 title = get_text_from_class(self.driver, 'endTitleSection')
                 question = get_text_from_class(self.driver, 'questionDetail')
-                print(title, question)
-                break
+                content = get_gpt_result_for_qna(title, question)
+                print(Content)
+                wait_and_click(self.driver, 'answerButtonArea', By.ID)
+                time.sleep(5)
+                keyboard_text_input(self.driver, content)
+                perform_return(self.driver, 2)
+                keyboard_text_input(self.driver, "https://sopecial.co.kr/")
+                perform_return(self.driver, 2)
+                time.sleep(5)
+                keyboard_text_input(self.driver, "위 링크에서 더 많은 상품을 볼 수 있어요.")
+                wait_and_click(self.driver, '_tagList', By.CLASS_NAME)
+                time.sleep(1)
+                tags = [
+                "선물추천",
+                "선물",
+                "한우",
+                "한우세트",
+                "추석선물",
+                "명절선물",
+                "명절선물세트",
+                "추석선물세트",
+                "한우명절선물",
+                "고급선물",
+                "프리미엄한우",
+                "명절한우",
+                "추석한우",
+                "가족선물",
+                "고급선물세트",
+                "한우선물세트",
+                "명절한우세트",
+                "한우추석선물",
+                "한우선물",
+                ]
+                random_tags = random.sample(tags, 10)
+                random.shuffle(random_tags)
+                # 띄어쓰기로 나뉜 문자열로 변환
+                result_string = " ".join(random_tags)
+                keyboard_text_input(self.driver, result_string)
+                time.sleep(3)
+                wait_and_click(self.driver, 'openIdOptionArea', By.ID)
+                time.sleep(3)
+                wait_and_click(self.driver, 'answerRegisterButton', By.ID)
+
+                row['qna_id'] = row['id']
+                row['user_id'] = self.id
+                row['content'] = content
+                row['is_accepted'] = False
+                row_df = pd.DataFrame([row])
+                
+
+                row_df[['qna_id', 'user_id', 'content', 'is_accepted']].to_sql(name=QnaAnswer.__tablename__, con=self.connection, if_exists='append', index=False)
+                time.sleep(60)
+                
 
             except Exception as E:
                 print(E)
+                time.sleep(5)
                 continue
+        self.driver.quit()
 
     def neighbor(self, page_seq=0):
         df = pd.read_csv('data/neighbor_msg.csv', header=None)

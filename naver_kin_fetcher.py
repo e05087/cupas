@@ -87,10 +87,10 @@ class NaverKinFetcher:
         # 추가 컬럼 설정
         df['source'] = 'kin'
         df['keyword'] = query_keyword
-        df['created_by_us'] = 0
+        df['created_by'] = 0
         
         # 컬럼 순서 재배치
-        df = df[['source', 'link', 'title', 'keyword', 'created_by_us', 'content_created_at']]
+        df = df[['source', 'link', 'title', 'keyword', 'created_by', 'content_created_at']]
 
         # DataFrame을 to_sql을 사용하여 데이터베이스에 삽입
         df.to_sql('qna', con=self.connector.get_connection(), if_exists='append', index=False)

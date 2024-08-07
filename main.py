@@ -89,4 +89,32 @@ if __name__ == '__main__':
                 if not results:
                     break
                 time.sleep(0.3)
-                
+
+    elif sys.argv[1] == 'kin_answer':
+        account = random.choice(setting.naver_accounts)
+        id = account['id']
+        passwd = account['passwd']
+        n = Naver(id, passwd, connector, headless=False)
+        n.login()
+        n.write_answer_kin()
+        time.sleep(20)
+
+    elif sys.argv[1] == 'kin_question':
+        for account in setting.naver_accounts:
+            #account = random.choice(setting.naver_accounts)
+            id = account['id']
+            passwd = account['passwd']
+            n = Naver(id, passwd, connector, headless=False)
+            n.login()
+            n.write_question_kin()
+            time.sleep(600)
+
+
+    elif sys.argv[1] == 'kin_accept':
+        account = random.choice(setting.naver_accounts)
+        id = account['id']
+        passwd = account['passwd']
+        n = Naver(id, passwd, connector, headless=False)
+        n.login()
+        n.accept_answer_kin()
+        time.sleep(20)

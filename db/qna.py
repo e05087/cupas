@@ -12,7 +12,7 @@ class Qna(Base):
     link = Column(Text)
     title = Column(Text)
     keyword = Column(Text)
-    created_by_us = Column(Boolean, default=False)
+    created_by = Column(Text)
     content_created_at = Column(DateTime(timezone=False))
     created_at = Column(DateTime(timezone=False), server_default=func.now())
     updated_at = Column(DateTime(timezone=False), onupdate=func.now())
