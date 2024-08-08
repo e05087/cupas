@@ -15,12 +15,21 @@ if __name__ == '__main__':
     setting = Settings()
     
     connector = Connector(setting.db_host, setting.db_id, setting.db_passwd, setting.db_name)
+    raw_query = "select * from bot"
+
+    data = pd.read_sql_query(raw_query, connector.get_engine())
+
+    naver_bot_accounts = data[(data['platform'] == 'naver') & (data['is_official'] == 0)]
+
+
+
     if sys.argv[1] == 'search':
         c = Coupang(setting.coupang_id, setting.coupang_passwd, connector)
         df = pd.read_csv('data/keyword.csv')
         keyword_list = df.iloc[:, 0].tolist()
         for keyword in keyword_list:
             c.search(keyword)
+        
     elif sys.argv[1] == 'gen_link':
         c = Coupang(setting.coupang_id, setting.coupang_passwd, connector)
         while True:
@@ -36,8 +45,8 @@ if __name__ == '__main__':
     elif sys.argv[1] == 'post':
         acc_cnt = {}
         while True:
-            account = random.choice(setting.naver_accounts)
-            id = account['id']
+            account = naver_bot_accounts.sample(n=1).iloc[0]
+            id = account['login_id']
             passwd = account['passwd']
             if id not in acc_cnt:
                 acc_cnt[id] = 0
@@ -50,8 +59,8 @@ if __name__ == '__main__':
     elif sys.argv[1] == 'wiki':
         acc_cnt = {}
         while True:
-            account = random.choice(setting.naver_accounts)
-            id = account['id']
+            account = naver_bot_accounts.sample(n=1).iloc[0]
+            id = account['login_id']
             passwd = account['passwd']
             if id not in acc_cnt:
                 acc_cnt[id] = 0
@@ -64,8 +73,8 @@ if __name__ == '__main__':
     elif sys.argv[1] == 'neighbor':
         acc_cnt = {}
         for i in range(6,20):
-            account = random.choice(setting.naver_accounts)
-            id = account['id']
+            account = naver_bot_accounts.sample(n=1).iloc[0]
+            id = account['login_id']
             passwd = account['passwd']
             if id not in acc_cnt:
                 acc_cnt[id] = 0
@@ -91,8 +100,8 @@ if __name__ == '__main__':
                 time.sleep(0.3)
 
     elif sys.argv[1] == 'kin_answer':
-        account = random.choice(setting.naver_accounts)
-        id = account['id']
+        account = naver_bot_accounts.sample(n=1).iloc[0]
+        id = account['login_id']
         passwd = account['passwd']
         n = Naver(id, passwd, connector, headless=False)
         n.login()
@@ -100,19 +109,21 @@ if __name__ == '__main__':
         time.sleep(20)
 
     elif sys.argv[1] == 'kin_question':
-        for account in setting.naver_accounts:
+        for idx, account in naver_bot_accounts.iterrows():
             #account = random.choice(setting.naver_accounts)
-            id = account['id']
+            id = account['login_id']
             passwd = account['passwd']
             n = Naver(id, passwd, connector, headless=False)
             n.login()
-            n.write_question_kin()
-            time.sleep(600)
+            for i in range(9):
+                n.write_question_kin()
+                time.sleep(1800)
+            n.driver.quit()
 
 
     elif sys.argv[1] == 'kin_accept':
-        account = random.choice(setting.naver_accounts)
-        id = account['id']
+        account = naver_bot_accounts.sample(n=1).iloc[0]
+        id = account['login_id']
         passwd = account['passwd']
         n = Naver(id, passwd, connector, headless=False)
         n.login()

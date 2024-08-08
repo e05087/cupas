@@ -11,6 +11,7 @@ from db.info_log import Base as InfoLogBase
 from db.neighbor import Base as NeighborBase
 from db.qna import Base as QnaBase
 from db.qna_answer import Base as QnaAnswerBase
+from db.bot import Base as BotBase
 
 if __name__ == '__main__':
     setting = Settings()
@@ -26,7 +27,7 @@ if __name__ == '__main__':
     NeighborBase.metadata.create_all(engine, checkfirst=True)
     QnaBase.metadata.create_all(engine, checkfirst=True)
     QnaAnswerBase.metadata.create_all(engine, checkfirst=True)
-
+    BotBase.metadata.create_all(engine, checkfirst=True)
     Session = sessionmaker(bind=engine)
 
     # Commit the changes and close the session

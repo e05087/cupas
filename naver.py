@@ -184,7 +184,7 @@ class Naver:
 
         # DataFrame을 SQL 테이블에 저장합니다.
         df.to_sql('qna', con=self.connection, if_exists='append', index=False)
-        self.driver.quit()
+        #self.driver.quit()
         
 
     
